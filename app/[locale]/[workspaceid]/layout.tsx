@@ -63,11 +63,8 @@ export default function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
     ;(async () => {
       const session = (await supabase.auth.getSession()).data.session
 
-      if (!session) {
-        return router.push("/login")
-      } else {
-        await fetchWorkspaceData(workspaceId)
-      }
+      // 匿名访问也允许，直接加载工作区数据
+      await fetchWorkspaceData(workspaceId)
     })()
   }, [])
 
