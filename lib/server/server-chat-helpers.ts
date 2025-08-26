@@ -17,22 +17,26 @@ export async function getServerProfile() {
     }
   )
 
+  // 获取当前登录用户（若存在）
   const user = (await supabase.auth.getUser()).data.user
-  if (!user) {
-    throw new Error("User not found")
+
+  let profile: Tables<"profiles"> | null = null
+
+  if (user) {
+    // 已登录用户，读取其存储的 profile
+    const { data } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("user_id", user.id)
+      .single()
+
+    profile = data ?? null
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("user_id", user.id)
-    .single()
+  // 对于未登录或未找到 profile 的情况，构造一个最小的占位对象，后续仍可通过环境变量补齐所需字段
+  const profileBase: Tables<"profiles"> = (profile ?? ({} as any)) as Tables<"profiles">
 
-  if (!profile) {
-    throw new Error("Profile not found")
-  }
-
-  const profileWithKeys = addApiKeysToProfile(profile)
+  const profileWithKeys = addApiKeysToProfile(profileBase)
 
   return profileWithKeys
 }
