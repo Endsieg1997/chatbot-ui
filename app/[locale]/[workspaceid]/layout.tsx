@@ -19,6 +19,7 @@ import { LLMID } from "@/types"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { ReactNode, useContext, useEffect, useState } from "react"
 import Loading from "../loading"
+import { Tables } from "@/supabase/types"
 
 interface WorkspaceLayoutProps {
   children: ReactNode
@@ -63,11 +64,8 @@ export default function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
     ;(async () => {
       const session = (await supabase.auth.getSession()).data.session
 
-      if (!session) {
-        return router.push("/login")
-      } else {
-        await fetchWorkspaceData(workspaceId)
-      }
+      // 匿名访问也允许，直接加载工作区数据
+      await fetchWorkspaceData(workspaceId)
     })()
   }, [])
 
@@ -91,11 +89,64 @@ export default function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
   const fetchWorkspaceData = async (workspaceId: string) => {
     setLoading(true)
 
-    const workspace = await getWorkspaceById(workspaceId)
-    setSelectedWorkspace(workspace)
-
-    const assistantData = await getAssistantWorkspacesByWorkspaceId(workspaceId)
-    setAssistants(assistantData.assistants)
+-    let workspace: Tables["workspaces"]["Row"] | null = null
+-    try {
+-      workspace = await getWorkspaceById(workspaceId)
+-    } catch (err) {
+-      // 若远端无记录，则使用默认 Public 工作区占位，以便匿名访问
+-      workspace = {
+-        id: "public",
+-        user_id: "anon",
+-        name: "Public",
+-        description: "公开工作区",
+-        icon: "🌐",
+-        is_home: false,
+-        default_model: "gpt-4-1106-preview",
+-        default_prompt: "You are a friendly, helpful AI assistant.",
+-        default_context_length: 4096,
+-        default_temperature: 0.5,
+-        include_profile_context: true,
+-        include_workspace_instructions: true,
+-        embeddings_provider: "openai",
+-        created_at: new Date().toISOString(),
+-        updated_at: new Date().toISOString()
+-      } as Tables["workspaces"]["Row"]
+-    }
+-
+-    setSelectedWorkspace(workspace)
+-
+-    const assistantData = await getAssistantWorkspacesByWorkspaceId(workspaceId)
+-    setAssistants(assistantData.assistants)
++    try {
++      let workspace: Tables["workspaces"]["Row"] | null = null
++      try {
++        workspace = await getWorkspaceById(workspaceId)
++      } catch (err) {
++        workspace = {
++          id: "public",
++          user_id: "anon",
++          name: "Public",
++          description: "公开工作区",
++          icon: "🌐",
++          is_home: false,
++          default_model: "gpt-4-1106-preview",
++          default_prompt: "You are a friendly, helpful AI assistant.",
++          default_context_length: 4096,
++          default_temperature: 0.5,
++          include_profile_context: true,
++          include_workspace_instructions: true,
++          embeddings_provider: "openai",
++          created_at: new Date().toISOString(),
++          updated_at: new Date().toISOString()
++        } as Tables["workspaces"]["Row"]
++      }
++
++      setSelectedWorkspace(workspace)
++
++      const assistantData = await getAssistantWorkspacesByWorkspaceId(
++        workspaceId
++      )
++      setAssistants(assistantData.assistants)
 
     for (const assistant of assistantData.assistants) {
       let url = ""
@@ -171,8 +222,12 @@ export default function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
       embeddingsProvider:
         (workspace?.embeddings_provider as "openai" | "local") || "openai"
     })
-
-    setLoading(false)
++
++    } catch (error) {
++      console.error("Failed to load workspace data", error)
++    } finally {
++      setLoading(false)
++    }
   }
 
   if (loading) {
